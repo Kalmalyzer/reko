@@ -37,6 +37,8 @@ namespace Reko.Arch.M68k
     [Designer("Reko.Arch.M68k.Design.M68kArchitectureDesigner,Reko.Arch.M68k.Design")]
     public class M68kArchitecture : ProcessorArchitecture
     {
+        private List<FlagGroupStorage> flagGroups;
+
         public M68kArchitecture()
         {
             InstructionBitSize = 16;
@@ -45,6 +47,8 @@ namespace Reko.Arch.M68k
             WordWidth = PrimitiveType.Word32;
             CarryFlagMask = (uint)FlagM.CF;
             StackRegister = Registers.a7;
+
+            flagGroups = new List<FlagGroupStorage>();
         }
 
         public override IEnumerable<MachineInstruction> CreateDisassembler(EndianImageReader rdr)
@@ -140,12 +144,34 @@ namespace Reko.Arch.M68k
 
         public override FlagGroupStorage GetFlagGroup(uint grf)
         {
-            throw new NotImplementedException();
+            foreach (FlagGroupStorage f in flagGroups)
+            {
+                if (f.FlagGroupBits == grf)
+                    return f;
+            }
+
+            PrimitiveType dt = Bits.IsSingleBitSet(grf) ? PrimitiveType.Bool : PrimitiveType.Byte;
+            var fl = new FlagGroupStorage(Registers.ccr, grf, GrfToString(grf), dt);
+            flagGroups.Add(fl);
+            return fl;
         }
 
         public override FlagGroupStorage GetFlagGroup(string name)
         {
-            throw new NotImplementedException();
+            FlagM grf = 0;
+            for (int i = 0; i < name.Length; ++i)
+            {
+                switch (name[i])
+                {
+                    case 'C': grf |= FlagM.CF; break;
+                    case 'V': grf |= FlagM.VF; break;
+                    case 'Z': grf |= FlagM.ZF; break;
+                    case 'N': grf |= FlagM.NF; break;
+                    case 'X': grf |= FlagM.XF; break;
+                    default: return null;
+                }
+            }
+            return GetFlagGroup((uint)grf);
         }
 
         public override IEnumerable<RtlInstructionCluster> CreateRewriter(EndianImageReader rdr, ProcessorState state, IStorageBinder binder, IRewriterHost host)
@@ -171,13 +197,12 @@ namespace Reko.Arch.M68k
             return Address.Ptr32(rdr.ReadBeUInt32());
         }
 
-        //$REVIEW: shouldn't this be flaggroup?
-        private static RegisterStorage[] flagRegisters = {
-            new RegisterStorage("C", 0, 0, PrimitiveType.Bool),
-            new RegisterStorage("V", 0, 0, PrimitiveType.Bool),
-            new RegisterStorage("Z", 0, 0, PrimitiveType.Bool),
-            new RegisterStorage("N", 0, 0, PrimitiveType.Bool),
-            new RegisterStorage("X", 0, 0, PrimitiveType.Bool),
+        private static string[] flagRegisterNames = {
+            "C",
+            "V",
+            "Z",
+            "N",
+            "X",
         };
 
         public override string GrfToString(uint grf)
@@ -186,7 +211,7 @@ namespace Reko.Arch.M68k
             for (int r = 0; grf != 0; ++r, grf >>= 1)
             {
                 if ((grf & 1) != 0)
-                    s.Append(flagRegisters[r].Name);
+                    s.Append(flagRegisterNames[r]);
             }
             return s.ToString();
         }
