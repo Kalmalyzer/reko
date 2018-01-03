@@ -142,7 +142,10 @@ namespace Reko.Analysis
 
         private int GetStackDepthBeforeCall()
         {
-            var spVal = ctx.RegisterState[platform.Architecture.StackRegister];
+            Expression spVal;
+            if (!ctx.RegisterState.TryGetValue(platform.Architecture.StackRegister, out spVal))
+                return 0;
+            //var spVal = ctx.RegisterState[platform.Architecture.StackRegister];
             if (ctx.IsFramePointer(spVal))
                 return 0;
             var bin = spVal as BinaryExpression;
