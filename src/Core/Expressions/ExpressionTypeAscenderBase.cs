@@ -228,26 +228,37 @@ namespace Reko.Core.Expressions
         {
             var ptLeft = dtLeft as PrimitiveType;
             var ptRight = dtRight as PrimitiveType;
-            if (ptLeft != null && ptLeft.Domain == Domain.Pointer || 
-                dtLeft is Pointer)
+
+            bool leftIsPointer = (ptLeft != null && ptLeft.Domain == Domain.Pointer || dtLeft is Pointer);
+            bool leftIsInteger = (ptLeft != null && (ptLeft.Domain & Domain.Integer) != 0);
+            bool rightIsPointer = (ptRight != null && ptRight.Domain == Domain.Pointer || dtRight is Pointer);
+            bool rightIsInteger = (ptRight != null && (ptRight.Domain & Domain.Integer) != 0);
+
+            if (leftIsPointer && rightIsPointer)
             {
-                if (ptRight != null && (ptRight.Domain & Domain.Integer) != 0)
-                    return PrimitiveType.Create(Domain.Pointer, dtLeft.Size);
-                throw new NotImplementedException(string.Format("Pulling difference {0} and {1}", dtLeft, dtRight));
+                // Difference between two pointers results in a ptrdiff_t, i.e. an integer
+                return PrimitiveType.Create(Domain.Integer, dtLeft.Size);
             }
-            if (ptRight != null && ptRight.Domain == Domain.Pointer || 
-                dtRight is Pointer)
+
+            if (leftIsPointer && rightIsInteger)
             {
-                if (ptRight != null && (ptRight.Domain & Domain.Integer) != 0)
-                    return dtLeft;
-                // If a dtRight is a pointer and it's being subtracted from 
-                // something, then the result has to be a ptrdiff_t, i.e.
-                // integer.
-                if (ptLeft != null && (ptLeft.Domain & Domain.Pointer) != 0)
-                    return PrimitiveType.Create(Domain.Integer, dtLeft.Size);
-                throw new NotImplementedException(string.Format("Pulling difference {0} and {1}", dtLeft, dtRight));
+                // Difference between pointer and integer results in a pointer
+                return dtLeft;
             }
-            return dtLeft;
+
+            if (!leftIsPointer && !rightIsPointer)
+            {
+                // Difference between two non-pointers results in the same data type
+                return dtLeft;
+            }
+
+            if (leftIsInteger && rightIsPointer)
+            {
+                // HACK: Difference between integer and pointer results in an integer
+                return dtLeft;
+            }
+
+            throw new NotImplementedException(string.Format("Pulling difference {0} and {1}", dtLeft, dtRight));
         }
 
         public DataType VisitCast(Cast cast)
